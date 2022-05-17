@@ -44,13 +44,28 @@ async function run() {
     const doctorCollection = client.db("doctors").collection("services");
     const bookingCollection = client.db("doctors").collection("bookings");
     const userCollection = client.db("doctors").collection("users");
+    const doctorsCollection = client.db("doctors").collection("doctor");
     console.log("db connected");
+
+    //veryfiadmin
+
+    const veryfiAdmin = async (req, res, next) => {
+      const adminuser = req.decoded.email;
+      const adminuserAccount = await userCollection.findOne({
+        email: adminuser,
+      });
+      if (adminuserAccount.role === "admin") {
+        next();
+      } else {
+        return res.status(403).send({ message: "forbbiden" });
+      }
+    };
 
     //get service
 
     app.get("/services", async (req, res) => {
       const query = {};
-      const cursor = doctorCollection.find(query);
+      const cursor = doctorCollection.find(query).project({ name: 1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -144,31 +159,42 @@ async function run() {
 
     //mak admin
 
-    app.get('/admin/:email', async(req, res) => {
+    app.get("/admin/:email", async (req, res) => {
       const email = req.params.email;
-      const user = await userCollection.findOne({email: email});
-      const isAdmin = user.role === 'admin';
-      res.send({admin: isAdmin});
+      const user = await userCollection.findOne({ email: email });
+      const isAdmin = user.role === "admin";
+      res.send({ admin: isAdmin });
+    });
+
+    app.put("/user/admin/:email", veryFiyJwt, veryfiAdmin, async (req, res) => {
+      const email = req.params.email;
+
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+
+      res.send(result);
+    });
+
+    app.get("/doctors", async (req, res) => {
+      const user = await doctorsCollection.find().toArray();
+      res.send(user);
+    });
+    app.post("/doctors", veryFiyJwt, veryfiAdmin, async (req, res) => {
+      const doctors = req.body;
+      const result = await doctorsCollection.insertOne(doctors);
+      res.send(result);
+    });
+
+    app.delete('/doctor/:email', veryFiyJwt, veryfiAdmin, async(req, res) => {
+      const email = req.params.email;
+      const query = {email: email}
+      const result = await doctorsCollection.deleteOne(query);
+      res.send(result)
     })
 
-    app.put("/user/admin/:email", veryFiyJwt, async (req, res) => {
-      const email = req.params.email;
-      const adminuser = req.decoded.email;
-      const adminuserAccount = await userCollection.findOne({
-        email: adminuser,
-      });
-      if (adminuserAccount.role ==='admin') {
-        const filter = { email: email };
-        const updateDoc = {
-          $set: { role: "admin" },
-        };
-        const result = await userCollection.updateOne(filter, updateDoc);
-
-        res.send(result);
-      } else {
-        res.status(403).send({ message: "not valid" });
-      }
-    });
   } finally {
     // await client.close();
   }
